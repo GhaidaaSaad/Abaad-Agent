@@ -20,7 +20,16 @@ class GenerateRequest(BaseModel):
 @app.post("/generate")
 async def generate(req: GenerateRequest):
     try:
-        state = {"prompt": req.prompt}
+        # Validate prompt
+        prompt = req.prompt.strip()
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+        if len(prompt) < 10:
+            raise HTTPException(
+                status_code=400, detail="Prompt must be at least 10 characters long"
+            )
+        
+        state = {"prompt": prompt}
         result = _workflow.invoke(state)
         zip_path = result.get("zip_path")
         if not zip_path or not os.path.exists(zip_path):
@@ -38,5 +47,3 @@ async def generate(req: GenerateRequest):
 
 
 # To run: uvicorn api.app:app --host 0.0.0.0 --port 8000
-
-

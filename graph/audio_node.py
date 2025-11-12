@@ -1,39 +1,58 @@
 import os
-import base64
 from typing import Dict, Any, Optional
 from loguru import logger
 import requests
+import replicate
 import numpy as np
 import soundfile as sf
 
 from utils.file_manager import ensure_job_dir, save_audio_bytes
 
 
-def _generate_audio_hf_inference(prompt: str) -> Optional[bytes]:
+def _generate_audio_replicate(prompt: str) -> Optional[bytes]:
     try:
-        hf_token = os.getenv("HF_TOKEN")
-        repo = os.getenv("MUSICGEN_MODEL_ID", "facebook/musicgen-small")
-        if not hf_token:
-            return None
-        url = f"https://api-inference.huggingface.co/models/{repo}"
-        headers = {"Authorization": f"Bearer {hf_token}"}
-        payload = {"inputs": prompt}
-        resp = requests.post(url, headers=headers, json=payload, timeout=120)
-        resp.raise_for_status()
-        # HF returns audio bytes directly or JSON error
-        if resp.headers.get("content-type", "").startswith("audio/"):
-            return resp.content
-        # Some models return JSON with b64
-        try:
-            data = resp.json()
-            b64 = data.get("audio", {}).get("data")
-            if b64:
-                return base64.b64decode(b64)
-        except Exception:
-            pass
-        return None
+        token = os.getenv("REPLICATE_API_TOKEN")
+        if not token:
+            raise RuntimeError("REPLICATE_API_TOKEN not set")
+        
+        # Set the API token for replicate client
+        os.environ["REPLICATE_API_TOKEN"] = token
+        
+        # Extract theme/mood from prompt for music description
+        music_prompt = f"ambient music for {prompt}"
+        
+        output = replicate.run(
+            "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb",
+            input={
+                "prompt": music_prompt,
+                "duration": 10
+            }
+        )
+        
+        # Handle different output formats
+        if hasattr(output, 'read'):
+            # FileOutput object - read directly
+            logger.debug("Reading audio from FileOutput object")
+            audio_bytes = output.read()
+            logger.debug("Audio generated successfully via Replicate MusicGen")
+            return audio_bytes
+        elif isinstance(output, str):
+            # String URL
+            audio_url = output
+        elif isinstance(output, (list, tuple)) and len(output) > 0:
+            # List of URLs
+            audio_url = output[0]
+        else:
+            raise RuntimeError(f"Unexpected output format from Replicate: {type(output)}")
+        
+        # Download audio from URL
+        audio_response = requests.get(audio_url, timeout=120)
+        audio_response.raise_for_status()
+        logger.debug("Audio generated successfully via Replicate MusicGen")
+        return audio_response.content
+        
     except Exception as e:
-        logger.warning(f"HF Inference audio failed: {e}")
+        logger.warning(f"Replicate audio generation failed: {e}")
         return None
 
 
@@ -55,7 +74,7 @@ def audio_node(state: Dict[str, Any]) -> Dict[str, Any]:
     job_dir = ensure_job_dir(state)
     prompt = state.get("sub_prompts", {}).get("audio") or state.get("prompt", "")
 
-    audio_bytes = _generate_audio_hf_inference(prompt)
+    audio_bytes = _generate_audio_replicate(prompt)
     if audio_bytes is None:
         audio_bytes = _generate_placeholder_audio(prompt)
 

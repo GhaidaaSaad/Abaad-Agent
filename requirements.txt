@@ -13,6 +13,12 @@ soundfile>=0.12.1
 # Optional / heavy deps (only needed if running local generation)
 diffusers>=0.30.0
 transformers>=4.44.2
+replicate>=0.25.0
+#torch>=2.0.0
+#torchaudio>=2.0.0
+#scipy>=1.10.0
+#audiocraft>=1.0.0
 # torch is optional; install a device-appropriate build if you plan to run local models
 # torch
+
 
