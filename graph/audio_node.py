@@ -70,16 +70,57 @@ def _generate_placeholder_audio(prompt: str) -> bytes:
 
 
 def audio_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    logger.info("audio_node: generating audio")
+    logger.info("audio_node: generating music and ambient audio")
     job_dir = ensure_job_dir(state)
-    prompt = state.get("sub_prompts", {}).get("audio") or state.get("prompt", "")
+    sub_prompts = state.get("sub_prompts", {}) or {}
+    required_assets = state.get("required_assets", {}) or {}
 
-    audio_bytes = _generate_audio_replicate(prompt)
-    if audio_bytes is None:
-        audio_bytes = _generate_placeholder_audio(prompt)
+    music_prompts = sub_prompts.get("audio_music") or []
+    ambient_prompts = sub_prompts.get("audio_ambient") or []
 
-    audio_path = save_audio_bytes(job_dir, audio_bytes, filename="audio.wav")
-    state.setdefault("outputs", {})["audio_path"] = audio_path
+    music_count = required_assets.get("music", 0)
+    ambient_count = required_assets.get("ambient", 0)
+    if music_count > 0:
+        music_prompts = music_prompts[:music_count]
+    if ambient_count > 0:
+        ambient_prompts = ambient_prompts[:ambient_count]
+    
+    if not music_prompts and not ambient_prompts:
+        logger.debug("No music or ambient requested; skipping")
+        return state
+
+    outputs = state.setdefault("outputs", {})
+    music_paths = []
+    ambient_paths = []
+
+    def _generate_and_save(prompt_text: str, filename: str) -> str:
+        audio_bytes = _generate_audio_replicate(prompt_text)
+        if audio_bytes is None:
+            audio_bytes = _generate_placeholder_audio(prompt_text)
+        return save_audio_bytes(job_dir, audio_bytes, filename=filename)
+
+    for idx, prompt in enumerate(music_prompts):
+        logger.debug(f"Generating music track {idx + 1}/{len(music_prompts)}")
+        filename = f"music_{idx + 1:02d}.wav"
+        music_paths.append(_generate_and_save(prompt, filename))
+
+    for idx, prompt in enumerate(ambient_prompts):
+        logger.debug(f"Generating ambient loop {idx + 1}/{len(ambient_prompts)}")
+        filename = f"ambient_{idx + 1:02d}.wav"
+        ambient_paths.append(_generate_and_save(prompt, filename))
+
+    # Fallback if no specific prompts available
+    if not music_paths and not ambient_paths:
+        base_prompt = sub_prompts.get("audio") or state.get("prompt", "")
+        logger.debug("No targeted audio prompts provided; generating default track")
+        music_paths.append(_generate_and_save(base_prompt, "music_01.wav"))
+
+    if music_paths:
+        outputs["audio_music"] = music_paths
+        outputs["audio_path"] = music_paths[0]
+    if ambient_paths:
+        outputs["audio_ambient"] = ambient_paths
+        if "audio_path" not in outputs:
+            outputs["audio_path"] = ambient_paths[0]
+
     return state
-
-

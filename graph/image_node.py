@@ -61,16 +61,38 @@ def _generate_placeholder_image(prompt: str) -> bytes:
 
 
 def image_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    logger.info("image_node: generating image")
+    logger.info("image_node: generating sprite concepts")
     job_dir = ensure_job_dir(state)
-    prompt = state.get("sub_prompts", {}).get("image") or state.get("prompt", "")
+    sub_prompts = state.get("sub_prompts", {}) or {}
+    required_assets = state.get("required_assets", {}) or {}
 
-    img_bytes = _generate_image_with_diffusers(prompt)
-    if img_bytes is None:
-        img_bytes = _generate_placeholder_image(prompt)
+    sprite_prompts = sub_prompts.get("sprites_2d") or []
+    if not sprite_prompts:
+        base_prompt = sub_prompts.get("image") or state.get("prompt", "")
+        sprite_prompts = [base_prompt] if base_prompt else []
 
-    img_path = save_image_bytes(job_dir, img_bytes, filename="image.png")
-    state.setdefault("outputs", {})["image_path"] = img_path
+    # Use AI-determined quantity
+    requested_count = required_assets.get("sprites_2d", 0)
+    if requested_count > 0:
+        sprite_prompts = sprite_prompts[:requested_count]
+    elif not sprite_prompts:
+        logger.debug("No sprites requested; skipping")
+        return state
+
+    outputs = state.setdefault("outputs", {})
+    sprite_paths = []
+
+    for idx, prompt in enumerate(sprite_prompts):
+        logger.debug(f"Generating sprite {idx + 1}/{len(sprite_prompts)}")
+        img_bytes = _generate_image_with_diffusers(prompt)
+        if img_bytes is None:
+            img_bytes = _generate_placeholder_image(prompt)
+        filename = "sprite_01.png" if idx == 0 else f"sprite_{idx + 1:02d}.png"
+        img_path = save_image_bytes(job_dir, img_bytes, filename=filename)
+        sprite_paths.append(img_path)
+
+    if sprite_paths:
+        outputs["sprites"] = sprite_paths
+        outputs["image_path"] = sprite_paths[0]
+
     return state
-
-
