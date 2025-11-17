@@ -1,51 +1,36 @@
 import argparse
-import os
 from loguru import logger
 from dotenv import load_dotenv
 
 from graph.workflow import build_workflow
 
 
-EXAMPLE_PROMPTS = [
-    "An emotional fantasy forest adventure with glowing trees and gentle music.",
-    "A cyberpunk city with neon lights and flying cars at night.",
-    "A serene underwater kingdom with bioluminescent creatures and coral castles.",
-    "A steampunk Victorian era with brass gears and steam-powered machines.",
-    "A mystical desert oasis with ancient ruins and magical sandstorms.",
-]
-
-
-def get_user_prompt() -> str:
-    """Prompt user for input with validation and examples."""
-    print("\n" + "=" * 60)
-    print("ABAAD-Agent - Game Asset Generator")
-    print("=" * 60)
-    print("\nExample prompts:")
-    for i, example in enumerate(EXAMPLE_PROMPTS, 1):
-        print(f"  {i}. {example}")
-    print("\n" + "-" * 60)
-    
-    while True:
-        prompt = input("\nEnter your description: ").strip()
-        
-        if not prompt:
-            print("❌ Error: Description cannot be empty. Please try again.")
-            continue
-        
-        if len(prompt) < 10:
-            print("❌ Error: Description must be at least 10 characters long. Please try again.")
-            continue
-        
-        return prompt
-
-
 def run_demo():
     """Run demo with user input."""
     try:
-        prompt = get_user_prompt()
+        print("\n" + "=" * 60)
+        print("ABAAD-Agent - Unity Game Asset Generator")
+        print("=" * 60)
+        print("\nDescribe your game and required assets:")
+        print("Example: 'Dark fantasy RPG. Need 3 character sprites, castle 3D model, dungeon music, 5 combat SFX. Style: dark, moody, gothic'")
+        print("-" * 60)
+        
+        while True:
+            prompt = input("\nDescription: ").strip()
+            
+            if not prompt:
+                print("❌ Error: Description cannot be empty. Please try again.")
+                continue
+            
+            if len(prompt) < 10:
+                print("❌ Error: Description must be at least 10 characters long. Please try again.")
+                continue
+            
+            break
+        
         logger.info(f"Starting demo run with prompt: {prompt[:50]}...")
         app = build_workflow()
-        state = {"prompt": prompt}
+        state = {"prompt": prompt}  # No preferences!
         result = app.invoke(state)
         zip_path = result.get("zip_path")
         if zip_path:
@@ -76,3 +61,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
